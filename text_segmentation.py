@@ -7,7 +7,7 @@ print("tiktoken version:", version("tiktoken"))
 file_path = "the-verdict.txt"
 with open("the-verdict.txt", "r", encoding="utf-8") as f:
     raw_text = f.read()
-print("Total number of character:", len(raw_text))
+# print("Total number of character:", len(raw_text))
 # print(raw_text[:99])
 #分割文本
 # - re.split() ：Python的 re 模块中的分割函数，根据正则表达式模式分割字符串
@@ -38,7 +38,7 @@ preprocessed = re.split(r'([,.:;?_!"()\']|--|\s)', raw_text)
 # - 功能 ：清理分割结果，移除空白元素，只保留有内容的词和标点
 preprocessed = [item.strip() for item in preprocessed if item.strip()]
 # 输出分割后的元素总数，即文本被分割成了多少个词/标点
-print(len(preprocessed))
+# print(len(preprocessed))
 # 输出前30个分割后的元素，用于查看分割效果
 # print(preprocessed[:30])
 # 构建词汇表的过程。首先将训练集中的全部文本分词成独立的词元；
@@ -58,8 +58,8 @@ vocab_size = len(all_words)
 # 创建一个字典，其中键是词元（token），值是整数索引
 # enumerate() 函数遍历 all_words 列表，返回(索引, 元素)对
 vocab = {token:integer for integer, token in enumerate(all_words)}
-for i, item in enumerate(list(vocab.items())[-5:]):
-    print(item)
+# for i, item in enumerate(list(vocab.items())[-5:]):
+#     print(item)
 for i, item in enumerate(vocab.items()):
     # print(item)
     if i >= 50:
@@ -104,7 +104,7 @@ class SimpleTokenizerV1:
         text = re.sub(r'\s+([,.?!"()\'])', r'\1', text)
         return text
 # vocab 是 词汇表 （vocabulary 的缩写），它是一个字典，将每个唯一的词元（token）映射到一个唯一的整数索引
-tokenizer = SimpleTokenizerV1(vocab)
+# tokenizer = SimpleTokenizerV1(vocab)
 # text = """"It's the last he painted, you know,"
 #        Mrs. Gisburn said with pardonable pride."""
 # ids = tokenizer.encode(text)
@@ -114,10 +114,30 @@ tokenizer = SimpleTokenizerV1(vocab)
 # text = "Hello, do you like tea?"
 # print(tokenizer.encode(text))
 
-text1 = "Hello, do you like tea?"
-text2 = "In the sunlit terraces of the palace."
-text = " <|endoftext|> ".join((text1, text2))
-print(text)
-print(tokenizer.encode(text))
-print(tokenizer.decode(tokenizer.encode(text)))
+# text1 = "Hello, do you like tea?"
+# text2 = "In the sunlit terraces of the palace."
+# text = " <|endoftext|> ".join((text1, text2))
 # print(text)
+# print(tokenizer.encode(text))
+# print(tokenizer.decode(tokenizer.encode(text)))
+# print(text)
+# 创建了一个 GPT-2 模型的 tokenizer 对象，该对象可以用于：
+
+# - 编码（encode） ：将文本字符串转换为 token ID 列表
+# - 解码（decode） ：将 token ID 列表转换回文本字符串
+tokenizer = tiktoken.get_encoding("gpt2")
+# text = (
+#     "Hello, do you like tea? <|endoftext|> In the sunlit terraces"
+#      "of someunknownPlace."
+# )
+# integers = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
+# print(integers)
+# strings = tokenizer.decode(integers)
+# print(strings)
+text = ("Akwirw ier")
+integers = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
+print(integers)
+strings = tokenizer.decode(integers)
+print(strings)
+
+
