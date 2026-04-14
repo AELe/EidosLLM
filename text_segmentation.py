@@ -1,6 +1,9 @@
 import re
 from importlib.metadata import version
 import tiktoken
+import torch
+from torch.utils.data import Dataset, DataLoader, dataloader
+
 
 print("tiktoken version:", version("tiktoken"))
 
@@ -31,12 +34,12 @@ with open("the-verdict.txt", "r", encoding="utf-8") as f:
 # - \s ：匹配任何空白字符（空格、制表符、换行符等）
 # - 功能 ：将文本按照标点符号和空白字符进行分割，同时保留这些分隔符
 
-preprocessed = re.split(r'([,.:;?_!"()\']|--|\s)', raw_text)
+# preprocessed = re.split(r'([,.:;?_!"()\']|--|\s)', raw_text)
 # - 列表推导式 ： [item.strip() for item in preprocessed if item.strip()]
 # - item.strip() ：移除每个元素两端的空白字符
 # - if item.strip() ：过滤掉空字符串或只包含空白字符的元素
 # - 功能 ：清理分割结果，移除空白元素，只保留有内容的词和标点
-preprocessed = [item.strip() for item in preprocessed if item.strip()]
+# preprocessed = [item.strip() for item in preprocessed if item.strip()]
 # 输出分割后的元素总数，即文本被分割成了多少个词/标点
 # print(len(preprocessed))
 # 输出前30个分割后的元素，用于查看分割效果
@@ -49,21 +52,21 @@ preprocessed = [item.strip() for item in preprocessed if item.strip()]
 # - sorted() ：对可迭代对象进行排序，返回一个新的有序列表
 # - set() ：创建一个无重复元素的集合，用于删除重复的词元
 # - 功能 ：将分割后的元素转换为一个有序的列表，同时删除重复的词元
-all_words = sorted(set(preprocessed))
-all_words.extend(["<|endoftext|>", "<|unk|>"])
-vocab_size = len(all_words)
+# all_words = sorted(set(preprocessed))
+# all_words.extend(["<|endoftext|>", "<|unk|>"])
+# vocab_size = len(all_words)
 # print(vocab_size)
 
 #创建词汇表
 # 创建一个字典，其中键是词元（token），值是整数索引
 # enumerate() 函数遍历 all_words 列表，返回(索引, 元素)对
-vocab = {token:integer for integer, token in enumerate(all_words)}
+# vocab = {token:integer for integer, token in enumerate(all_words)}
 # for i, item in enumerate(list(vocab.items())[-5:]):
 #     print(item)
-for i, item in enumerate(vocab.items()):
+# for i, item in enumerate(vocab.items()):
     # print(item)
-    if i >= 50:
-        break
+    # if i >= 50:
+    #     break
 
 class SimpleTokenizerV1:
     def __init__(self, vocab):
@@ -134,10 +137,83 @@ tokenizer = tiktoken.get_encoding("gpt2")
 # print(integers)
 # strings = tokenizer.decode(integers)
 # print(strings)
-text = ("Akwirw ier")
-integers = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
-print(integers)
-strings = tokenizer.decode(integers)
-print(strings)
+# text = ("Akwirw ier")
+# integers = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
+# print(integers)
+# strings = tokenizer.decode(integers)
+# print(strings)
+
+# enc_text = tokenizer.encode(raw_text)
+# print(len(enc_text))
+# - 从索引50开始 （包含索引50）
+# - 到列表末尾结束
+# - 提取这个范围内的所有元素
+# enc_sample = enc_text[50:]
+# context_size = 4
+# 从 enc_sample 中提取前 context_size 个元素
+# x = enc_sample[:context_size]
+# y = enc_sample[1:context_size+1]
+
+# print(f"x: {x}")
+# print(f"y: {y}")
+# for i in range(1, context_size+1):
+#     context = enc_sample[:i]
+#     desired = enc_sample[i]
+#     print(context, "---->", desired)
+# for i in range(1, context_size+1):
+#    context = enc_sample[:i]
+#    desired = enc_sample[i]
+#    print(tokenizer.decode(context), "---->", tokenizer.decode([desired]))
+
+class GPTDatasetV1(Dataset):
+    def __init__(self, txt, tokenizer, max_length, stride):
+        self.input_ids = []
+        self.target_ids = []
+
+        token_ids = tokenizer.encode(txt)
+        for i in range(0, len(token_ids) - max_length, stride):
+            input_chunk = token_ids[i:i + max_length]
+            target_chunk = token_ids[i + 1:i + max_length + 1]
+            self.input_ids.append(torch.tensor(input_chunk))
+            self.target_ids.append(torch.tensor(target_chunk))
+
+    def __len__(self):
+        return len(self.input_ids) 
+    
+    def __getitem__(self, idx):
+        return self.input_ids[idx], self.target_ids[idx]
+
+def create_dataloader_v1(txt, batch_size=4, max_length=256,
+                         stride=128, shuffle=True, drop_last=True,
+                         num_workers=0):
+    tokenizer = tiktoken.get_encoding("gpt2")
+    dataset = GPTDatasetV1(txt, tokenizer, max_length, stride)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,
+                                drop_last=drop_last, num_workers=num_workers)
+    return dataloader
+
+# dataloader = create_dataloader_v1(raw_text, batch_size=1, max_length=4, stride=1, shuffle=False)
+# data_iter = iter(dataloader)
+# first_batch = next(data_iter)
+# print(first_batch)
+# second_batch = next(data_iter)
+# print(second_batch)
+dataloader = create_dataloader_v1(raw_text, batch_size=8, max_length=4, stride=4, shuffle=False)
+data_iter = iter(dataloader)
+inputs, targets = next(data_iter)
+# print("Inputs:\n", inputs)
+# print("\nTargets:\n", targets)
+
+inputs_ids = torch.tensor([2, 3, 5, 1])
+
+
+# 创建了一个6×3的词嵌入层，将6个token ID映射到3维向量空间，并打印初始化的权重矩阵
+vocab_size = 6
+output_dim = 3
+torch.manual_seed(123)
+embedding_layer = torch.nn.Embedding(vocab_size, output_dim)
+print(embedding_layer.weight)
+
+
 
 
