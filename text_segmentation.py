@@ -3,6 +3,7 @@ from importlib.metadata import version
 import tiktoken
 import torch
 from torch.utils.data import Dataset, DataLoader, dataloader
+import torch.nn as nn
 
 
 print("tiktoken version:", version("tiktoken"))
@@ -10,169 +11,25 @@ print("tiktoken version:", version("tiktoken"))
 file_path = "the-verdict.txt"
 with open("the-verdict.txt", "r", encoding="utf-8") as f:
     raw_text = f.read()
-# print("Total number of character:", len(raw_text))
-# print(raw_text[:99])
-#分割文本
-# - re.split() ：Python的 re 模块中的分割函数，根据正则表达式模式分割字符串
-# - 正则表达式模式 ： r'([,.:;?_!"()\']|--|\s)'
 
-# - r'' ：原始字符串，避免转义字符的问题
-# - () ：捕获分组，表示分割时保留分隔符
-# - [,.:;?_!"()\'] ：匹配以下任意一个标点符号：
-#   - , 逗号
-#   - . 句号
-#   - : 冒号
-#   - ; 分号
-#   - ? 问号
-#   - _ 下划线
-#   - ! 感叹号
-#   - " 双引号
-#   - () 括号
-#   - ' 单引号
-# - | ：或运算符
-# - -- ：匹配双破折号（英文中常用的标点）
-# - \s ：匹配任何空白字符（空格、制表符、换行符等）
-# - 功能 ：将文本按照标点符号和空白字符进行分割，同时保留这些分隔符
 
-# preprocessed = re.split(r'([,.:;?_!"()\']|--|\s)', raw_text)
-# - 列表推导式 ： [item.strip() for item in preprocessed if item.strip()]
-# - item.strip() ：移除每个元素两端的空白字符
-# - if item.strip() ：过滤掉空字符串或只包含空白字符的元素
-# - 功能 ：清理分割结果，移除空白元素，只保留有内容的词和标点
-# preprocessed = [item.strip() for item in preprocessed if item.strip()]
-# 输出分割后的元素总数，即文本被分割成了多少个词/标点
-# print(len(preprocessed))
-# 输出前30个分割后的元素，用于查看分割效果
-# print(preprocessed[:30])
-# 构建词汇表的过程。首先将训练集中的全部文本分词成独立的词元；
-# 然后将这些词元按字母顺序进行排列，并删除重复的词元；
-# 接下来将唯一的词元聚合到一张词汇表中，该词汇表定义了每个唯一的词元到唯一的整数值的映射。
-
-# 创建一个包含所有唯一词元的列表，并将它们按照字母顺序排列
-# - sorted() ：对可迭代对象进行排序，返回一个新的有序列表
-# - set() ：创建一个无重复元素的集合，用于删除重复的词元
-# - 功能 ：将分割后的元素转换为一个有序的列表，同时删除重复的词元
-# all_words = sorted(set(preprocessed))
-# all_words.extend(["<|endoftext|>", "<|unk|>"])
-# vocab_size = len(all_words)
-# print(vocab_size)
-
-#创建词汇表
-# 创建一个字典，其中键是词元（token），值是整数索引
-# enumerate() 函数遍历 all_words 列表，返回(索引, 元素)对
-# vocab = {token:integer for integer, token in enumerate(all_words)}
-# for i, item in enumerate(list(vocab.items())[-5:]):
-#     print(item)
-# for i, item in enumerate(vocab.items()):
-    # print(item)
-    # if i >= 50:
-    #     break
-
-class SimpleTokenizerV1:
-    def __init__(self, vocab):
-        # vocab - 词汇表字典，格式为 {词元: 索引}
-        # 保存原始词汇表，用于将字符串映射到整数
-        self.str_to_int = vocab
-        # 创建反向映射字典，用于将整数映射回字符串
-        self.int_to_str = {i : s for s, i in vocab.items()}
-
-    def encode(self, text):
-        preprocessed = re.split(r'([,.?_!"()\']|--|\s)', text)
-        # 对每个 item 执行：
-        # 1. 计算 item.strip() 得到清理后的结果
-        # 2. 检查 item.strip() 是否为空
-        # 3. 如果不为空，将清理后的结果加入新列表
-        preprocessed = [item.strip() for item in preprocessed if item.strip()]
-        # 执行顺序 是从右到左的
-        preprocessed = [item if item in self.str_to_int else "<|unk|>" for item in preprocessed]
-        ids = [self.str_to_int[s] for s in preprocessed]
-        return ids
-    
-    def decode(self, ids):
-        # 用空格连接列表中的所有词元
-        ### 在正则表达式 r'\s+([,.?!"()\'])' 中：
-        # - () 创建了一个 捕获组
-        # - 这个捕获组匹配标点符号： , . ? ! " ( ) '
-        # - 这是 第一个 （也是唯一一个）捕获组
-        ### 2. r'\1' 的含义：
-        # - \1 表示"第一个捕获组的内容"
-        # - 在替换时，用捕获组匹配到的标点符号本身来替换
-        ### 3. 实际效果：
-        # 匹配到： " ," （空格+逗号）
-
-        # - 捕获组匹配到： , （逗号）
-        # - \1 就是： , （逗号）
-        # - 替换结果：用 "," 替换 " ,"
-        text = " ".join([self.int_to_str[i] for i in ids])
-        text = re.sub(r'\s+([,.?!"()\'])', r'\1', text)
-        return text
-# vocab 是 词汇表 （vocabulary 的缩写），它是一个字典，将每个唯一的词元（token）映射到一个唯一的整数索引
-# tokenizer = SimpleTokenizerV1(vocab)
-# text = """"It's the last he painted, you know,"
-#        Mrs. Gisburn said with pardonable pride."""
-# ids = tokenizer.encode(text)
-# print(ids)
-# print(tokenizer.decode(ids))    
-
-# text = "Hello, do you like tea?"
-# print(tokenizer.encode(text))
-
-# text1 = "Hello, do you like tea?"
-# text2 = "In the sunlit terraces of the palace."
-# text = " <|endoftext|> ".join((text1, text2))
-# print(text)
-# print(tokenizer.encode(text))
-# print(tokenizer.decode(tokenizer.encode(text)))
-# print(text)
-# 创建了一个 GPT-2 模型的 tokenizer 对象，该对象可以用于：
-
-# - 编码（encode） ：将文本字符串转换为 token ID 列表
-# - 解码（decode） ：将 token ID 列表转换回文本字符串
 tokenizer = tiktoken.get_encoding("gpt2")
-# text = (
-#     "Hello, do you like tea? <|endoftext|> In the sunlit terraces"
-#      "of someunknownPlace."
-# )
-# integers = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
-# print(integers)
-# strings = tokenizer.decode(integers)
-# print(strings)
-# text = ("Akwirw ier")
-# integers = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
-# print(integers)
-# strings = tokenizer.decode(integers)
-# print(strings)
-
-# enc_text = tokenizer.encode(raw_text)
-# print(len(enc_text))
-# - 从索引50开始 （包含索引50）
-# - 到列表末尾结束
-# - 提取这个范围内的所有元素
-# enc_sample = enc_text[50:]
-# context_size = 4
-# 从 enc_sample 中提取前 context_size 个元素
-# x = enc_sample[:context_size]
-# y = enc_sample[1:context_size+1]
-
-# print(f"x: {x}")
-# print(f"y: {y}")
-# for i in range(1, context_size+1):
-#     context = enc_sample[:i]
-#     desired = enc_sample[i]
-#     print(context, "---->", desired)
-# for i in range(1, context_size+1):
-#    context = enc_sample[:i]
-#    desired = enc_sample[i]
-#    print(tokenizer.decode(context), "---->", tokenizer.decode([desired]))
 
 class GPTDatasetV1(Dataset):
+    #参数
+    #txt: 原始文本数据
+    #tokenizer: 分词器，用于将文本转换为token ID序列
+    #max_length: 每个训练样本的最大长度（上下文窗口大小）
+    #stride: 滑动窗口的步长
     def __init__(self, txt, tokenizer, max_length, stride):
         self.input_ids = []
         self.target_ids = []
-
+        #首先将整个文本txt通过分词器转换为token ID序列
         token_ids = tokenizer.encode(txt)
         for i in range(0, len(token_ids) - max_length, stride):
+            #input_chunk: 从位置i开始，长度为max_length的token序列
             input_chunk = token_ids[i:i + max_length]
+            #从位置i+1开始，长度为max_length的token序列（即输入序列向右偏移1位）
             target_chunk = token_ids[i + 1:i + max_length + 1]
             self.input_ids.append(torch.tensor(input_chunk))
             self.target_ids.append(torch.tensor(target_chunk))
@@ -182,37 +39,175 @@ class GPTDatasetV1(Dataset):
     
     def __getitem__(self, idx):
         return self.input_ids[idx], self.target_ids[idx]
-
+#这个函数通常用于：
+#准备 GPT 风格语言模型的训练数据
+#处理长文本时使用滑动窗口创建训练样本
+#批量加载数据到模型中训练
 def create_dataloader_v1(txt, batch_size=4, max_length=256,
                          stride=128, shuffle=True, drop_last=True,
                          num_workers=0):
+    #使用 OpenAI 的 tiktoken 库获取 GPT-2 的 tokenizer，将文本转换为 token ID                         
     tokenizer = tiktoken.get_encoding("gpt2")
+    #创建一个 GPTDatasetV1实例，这个数据集类应该实现了：
+    #将文本 tokenize 成 token ID
+    #使用滑动窗口方法创建训练样本
+    #每个样本长度为 max_length，相邻样本重叠 max_length - stride 个 token
     dataset = GPTDatasetV1(txt, tokenizer, max_length, stride)
+    #使用 PyTorch 的 DataLoader 包装数据集，提供批量加载、打乱、多进程加载等功能
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,
                                 drop_last=drop_last, num_workers=num_workers)
     return dataloader
 
-# dataloader = create_dataloader_v1(raw_text, batch_size=1, max_length=4, stride=1, shuffle=False)
-# data_iter = iter(dataloader)
-# first_batch = next(data_iter)
-# print(first_batch)
-# second_batch = next(data_iter)
-# print(second_batch)
-dataloader = create_dataloader_v1(raw_text, batch_size=8, max_length=4, stride=4, shuffle=False)
+#max_length = 4: 设置上下文窗口大小为4个token
+max_length = 4
+#创建数据加载器，从文本中生成训练样本
+dataloader = create_dataloader_v1(raw_text, batch_size=8, max_length=max_length, stride=4, shuffle=False)
 data_iter = iter(dataloader)
+#获取一个批次的数据：inputs是输入序列，targets是目标序列（输入向右偏移1位）
 inputs, targets = next(data_iter)
-# print("Inputs:\n", inputs)
-# print("\nTargets:\n", targets)
 
-inputs_ids = torch.tensor([2, 3, 5, 1])
+#词嵌入层
+#vocab_size = 50257: GPT-2的词表大小
+vocab_size = 50257
+#output_dim = 256: 嵌入向量的维度
+output_dim = 256
+#创建词嵌入层，将token ID映射为256维向量
+token_embedding_layer = torch.nn.Embedding(vocab_size, output_dim)
+#token_embeddings.shape: 输出形状为 (batch_size, sequence_length, embedding_dim)
+token_embeddings = token_embedding_layer(inputs)
+# print(token_embeddings.shape)
+
+class SelfAttention_v1(nn.Module):
+    def __init__(self, d_in, d_out):
+        super().__init__()
+        self.W_query = nn.Parameter(torch.rand(d_in, d_out))
+        self.W_key = nn.Parameter(torch.rand(d_in, d_out))
+        self.W_value = nn.Parameter(torch.rand(d_in, d_out))
+    
+    def forward(self, x):
+        keys = x @ self.W_key
+        queries = x @ self.W_query
+        values = x @ self.W_value
+
+        attn_scores = queries @ keys.T
+        attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)
+        context_vec = attn_weights @ values
+
+        return context_vec
+
+class SelftAttention_v2(nn.Module):
+    def __init__(self, d_in, d_out, qkv_bias=False):
+        super().__init__()
+        self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_key = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)
+
+    def forward(self, x):
+        keys = self.W_key(x)
+        queries = self.W_query(x)
+        values = self.W_value(x)
+
+        attn_scores = queries @ keys.T
+        attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)
+        context_vec = attn_weights @ values
+
+        return context_vec
 
 
-# 创建了一个6×3的词嵌入层，将6个token ID映射到3维向量空间，并打印初始化的权重矩阵
-vocab_size = 6
-output_dim = 3
+class CausalAttention(nn.Module):
+    def __init__(self, d_in, d_out, context_length, dropout, qkv_bias=False):
+        super().__init__()
+        self.d_out = d_out
+        self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_key = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.dropout = nn.Dropout(dropout)
+        self.register_buffer('mask', torch.triu(torch.ones(context_length, context_length), diagonal=1))
+
+    def forward(self, x):
+        b, num_tokens, d_in = x.shape
+        keys = self.W_key(x)
+        queries = self.W_query(x)
+        values = self.W_value(x)
+        # print("keys shape:", keys.shape)
+        # print("queries shape:", queries.shape)
+        # print("values shape:", values.shape)
+
+        attn_scores = queries @ keys.transpose(1, 2)
+        attn_scores.masked_fill_(self.mask.bool()[:num_tokens, :num_tokens], float('-inf'))
+        attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)
+        attn_weights = self.dropout(attn_weights)
+        context_vec = attn_weights @ values
+        
+        return context_vec
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
+        super().__init__()
+        self.heads = nn.ModuleList([CausalAttention(d_in, d_out, context_length, dropout, qkv_bias) for _ in range(num_heads)])
+    
+    def forward(self,x):
+        return torch.cat([head(x) for head in self.heads], dim=-1)
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
+        super().__init__()
+        assert (d_out % num_heads == 0), \
+            "d_out must be divisible by num_heads"
+        self.d_out = d_out
+        self.num_heads = num_heads
+        self.head_dim = d_out // num_heads
+        self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_key = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.out_proj = nn.Linear(d_out, d_out)
+        self.dropout = nn.Dropout(dropout)
+        self.register_buffer('mask', torch.triu(torch.ones(context_length, context_length), diagonal=1))
+    def forward(self, x):
+        b, num_tokens, d_in = x.shape
+        keys = self.W_key(x)
+        queries = self.W_query(x)
+        values = self.W_value(x)
+        keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)
+        values = values.view(b, num_tokens, self.num_heads, self.head_dim)
+        queries = queries.view(b, num_tokens, self.num_heads, self.head_dim) 
+
+        keys = keys.transpose(1, 2)
+        queries = queries.transpose(1, 2)
+        values = values.transpose(1, 2) 
+
+        attn_scores = queries @ keys.transpose(2, 3)
+        mask_bool = self.mask.bool()[:num_tokens, :num_tokens]
+        attn_scores.masked_fill_(mask_bool, -torch.inf)
+        attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)
+        attn_weights = self.dropout(attn_weights)
+        context_vec = (attn_weights @ values).transpose(1, 2)
+        context_vec = context_vec.contiguous().view(b, num_tokens, self.d_out)
+        context_vec = self.out_proj(context_vec)
+        return context_vec
+
+
+        
+
+inputs = torch.tensor([
+    [0.43, 0.15, 0.89], #Your
+    [0.55, 0.87, 0.66], #journey
+    [0.57, 0.85, 0.64], #starts
+    [0.22, 0.58, 0.33], #with
+    [0.77, 0.25, 0.10], #one
+    [0.05, 0.80, 0.55]  #step
+])
+
+batch = torch.stack([inputs, inputs], dim=0)
 torch.manual_seed(123)
-embedding_layer = torch.nn.Embedding(vocab_size, output_dim)
-print(embedding_layer.weight)
+batch_size, context_length, d_in = batch.shape
+d_out = 2
+mha = MultiHeadAttention(d_in, d_out, context_length, 0.0, num_heads=2)
+context_vecs = mha(batch)
+print("context_vecs:", context_vecs)    
+print("context_vecs.shape:", context_vecs.shape)
+
+
 
 
 
