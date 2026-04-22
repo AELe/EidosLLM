@@ -164,15 +164,16 @@ class MultiHeadAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.register_buffer('mask', torch.triu(torch.ones(context_length, context_length), diagonal=1))
     def forward(self, x):
-        b, num_tokens, d_in = x.shape
-        keys = self.W_key(x)
-        queries = self.W_query(x)
-        values = self.W_value(x)
-        keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)
-        values = values.view(b, num_tokens, self.num_heads, self.head_dim)
-        queries = queries.view(b, num_tokens, self.num_heads, self.head_dim) 
+        b, num_tokens, d_in = x.shape 
+        keys = self.W_key(x) 
+        queries = self.W_query(x) 
+        values = self.W_value(x) 
 
-        keys = keys.transpose(1, 2)
+        keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)  
+        values = values.view(b, num_tokens, self.num_heads, self.head_dim) 
+        queries = queries.view(b, num_tokens, self.num_heads, self.head_dim)   
+
+        keys = keys.transpose(1, 2) 
         queries = queries.transpose(1, 2)
         values = values.transpose(1, 2) 
 
@@ -182,6 +183,7 @@ class MultiHeadAttention(nn.Module):
         attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)
         attn_weights = self.dropout(attn_weights)
         context_vec = (attn_weights @ values).transpose(1, 2)
+        print("context_vec shape:", context_vec.shape)
         context_vec = context_vec.contiguous().view(b, num_tokens, self.d_out)
         context_vec = self.out_proj(context_vec)
         return context_vec
@@ -199,13 +201,13 @@ inputs = torch.tensor([
 ])
 
 batch = torch.stack([inputs, inputs], dim=0)
+
 torch.manual_seed(123)
 batch_size, context_length, d_in = batch.shape
 d_out = 2
 mha = MultiHeadAttention(d_in, d_out, context_length, 0.0, num_heads=2)
 context_vecs = mha(batch)
-print("context_vecs:", context_vecs)    
-print("context_vecs.shape:", context_vecs.shape)
+
 
 
 
